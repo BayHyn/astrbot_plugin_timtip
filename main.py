@@ -174,8 +174,6 @@ class TimPlugin(Star):
         target = task.get("target")
         content = task.get("content")
         if target and content:
-            # 生成组件列表（这里只生成纯文本消息）
-            components = self.__class__.parse_message(content)
             # 使用 MessageChain 的 message() 方法构造消息链
             chain = MessageChain().message(content)
             logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
@@ -344,6 +342,23 @@ class TimPlugin(Star):
             "4. tim 启用 <任务编号>              -- 启用被暂停的任务\n"
             "5. tim 清空 <任务编号>              -- 清空任务发送内容\n"
             "6. tim 列出任务                   -- 列出当前会话中所有任务\n"
-            "7. tim help                       -- 显示此帮助信息"
+            "7. tim 编辑信息 <任务编号> <发送信息>  -- 编辑指定任务的发送内容\n"
+            "8. tim help                       -- 显示此帮助信息"
         )
         yield event.plain_result(help_msg)
+
+    @filter.command("tim 编辑信息")
+    async def edit_info(self, event: AstrMessageEvent, task_id: int, new_content: str = ""):
+        """
+        编辑指定任务的发送内容
+        示例: tim 编辑信息 1 新的发送信息
+        """
+        umo = event.unified_msg_origin
+        tid = str(task_id)
+        if umo in self.tasks and tid in self.tasks[umo]:
+            self.tasks[umo][tid]["content"] = new_content
+            self.__class__.save_tasks(self.tasks)
+            logging.debug("编辑任务 %s 的内容为: %s", tid, new_content)
+            yield event.plain_result(f"任务 {tid} 的发送内容已更新为: {new_content}")
+        else:
+            yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
