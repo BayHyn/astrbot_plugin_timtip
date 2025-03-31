@@ -9,7 +9,6 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
 import astrbot.api.message_components as Comp  # 包含 Plain、Image 等组件
 
-
 # 日志文件路径
 log_file = "./data/plugins/astrbot_plugin_timtip/bot.log"
 
@@ -20,7 +19,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.FileHandler(log_file, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout)  # 输出到控制台
+        logging.StreamHandler(sys.stdout)
     ]
 )
 
@@ -30,14 +29,11 @@ logging.info("日志系统初始化完成，日志文件路径: %s", log_file)
 @register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息插件", "1.1.1",
           "https://github.com/IGCrystal/astrbot_plugin_timtip")
 class TimPlugin(Star):
-    # 使用 __file__ 的目录作为基准路径，并转换为绝对路径
     TIM_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "tim.json"))
 
     def __init__(self, context: Context):
         super().__init__(context)
-        # 按会话存储任务：{umo: {task_id(str): task_data(dict), ...}, ...}
         self.tasks = self.__class__.load_tasks()
-        # 全局任务编号从 1 开始
         self.next_id = 1
         for task_dict in self.tasks.values():
             for tid in task_dict.keys():
@@ -47,10 +43,8 @@ class TimPlugin(Star):
                         self.next_id = tid_int + 1
                 except Exception:
                     continue
-        # 记录已执行 fixed 任务标识，格式: "{umo}_{task_id}_{day}_{hour}_{minute}"
         self.executed_tasks = set()
         self.last_day = (datetime.utcnow() + timedelta(hours=8)).day
-        # 启动后台调度器
         asyncio.create_task(self.scheduler_loop())
         logging.debug("TimPlugin 初始化完成，定时任务调度器已启动")
 
@@ -85,10 +79,6 @@ class TimPlugin(Star):
 
     @staticmethod
     def parse_time(time_str: str) -> tuple:
-        """
-        解析固定时间格式，要求格式为 "HH时MM分"
-        返回 (hour, minute)
-        """
         pattern = r'^(\d{1,2})时(\d{1,2})分$'
         match = re.match(pattern, time_str)
         if not match:
@@ -101,13 +91,10 @@ class TimPlugin(Star):
 
     @staticmethod
     def parse_message(content: str):
-        """
-        将用户输入内容解析为消息链，只发送纯文本消息，不处理 [img] 标签。
-        """
+        # 返回纯文本组件列表
         return [Comp.Plain(content)]
 
     async def scheduler_loop(self):
-        """后台调度器，每 1 秒检查一次所有会话中的任务条件"""
         while True:
             now = datetime.utcnow() + timedelta(hours=8)
             current_day = now.day
@@ -116,18 +103,14 @@ class TimPlugin(Star):
                 self.executed_tasks.clear()
                 self.last_day = current_day
                 logging.debug("新的一天，清空固定任务执行记录。")
-
-            # 遍历每个会话的任务
             for umo, task_dict in self.tasks.items():
                 logging.debug("检查会话 %s 下的任务: %s", umo, task_dict)
                 for tid, task in list(task_dict.items()):
                     if task.get("status", "active") != "active" or not task.get("content", "").strip():
                         continue
-
                     task_type = task.get("type")
                     last_run = task.get("last_run")
                     last_run_dt = datetime.fromisoformat(last_run) if last_run else None
-
                     if task_type == "interval":
                         try:
                             interval = float(task.get("time"))
@@ -168,44 +151,32 @@ class TimPlugin(Star):
             await asyncio.sleep(1)
 
     async def send_task_message(self, task: dict):
-    """构造消息链并发送任务消息"""
-    target = task.get("target")
-    content = task.get("content")
-    if target and content:
-        # 先生成一个组件列表（这里只生成纯文本消息）
-        components = self.__class__.parse_message(content)
-        # 用 MessageChain 包装这些组件
-        chain = MessageChain(components)
-        logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
-        try:
-            await self.context.send_message(target, chain)
-            logging.debug("消息发送成功")
-        except Exception as e:
-            logging.error("发送消息时出错: %s", e)
-    else:
-        logging.error("任务内容或目标为空，无法发送消息。")
+        """构造消息链并发送任务消息"""
+        target = task.get("target")
+        content = task.get("content")
+        if target and content:
+            # 生成组件列表
+            components = self.__class__.parse_message(content)
+            # 创建一个 MessageChain 对象并添加组件
+            chain = MessageChain()
+            for comp in components:
+                chain.append(comp)
+            logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
+            try:
+                await self.context.send_message(target, chain)
+                logging.debug("消息发送成功")
+            except Exception as e:
+                logging.error("发送消息时出错: %s", e)
+        else:
+            logging.error("任务内容或目标为空，无法发送消息。")
 
-    # 指令组 "tim"
     @filter.command_group("tim")
     def tim(self):
         pass
 
     @filter.command("tim 设置定时")
     async def set_timing(self, event: AstrMessageEvent, task_type: str, time_value: str, content: str = ""):
-        """
-        添加定时任务并设置发送内容（一步到位）
-        示例:
-        tim 设置定时 interval 5 第一行\n第二行
-        tim 设置定时 fixed 20时30分 快到点了，该发送啦！
-        tim 设置定时 once 10 临时提醒：快吃饭喵~
-        任务类型：
-        interval: 每隔指定分钟发送
-        fixed: 每天在指定时间发送 (格式: HH时MM分，UTC+8)
-        once: 延迟指定分钟后发送一次
-        """
         logging.debug("set_timing 参数：task_type=%s, time_value=%s, content=%s", task_type, time_value, content)
-
-        # 校验任务类型及时间参数
         if task_type == "fixed":
             try:
                 self.__class__.parse_time(time_value)
@@ -221,16 +192,14 @@ class TimPlugin(Star):
         else:
             yield event.plain_result("未知的任务类型，请使用 interval, fixed 或 once。")
             return
-
         now = datetime.utcnow() + timedelta(hours=8)
         umo = event.unified_msg_origin
         if umo not in self.tasks:
             self.tasks[umo] = {}
-
         task_data = {
             "type": task_type,
             "time": time_value,
-            "content": content,  # 发送内容
+            "content": content,
             "status": "active",
             "create_time": now.isoformat(),
             "last_run": None,
@@ -247,10 +216,6 @@ class TimPlugin(Star):
 
     @filter.command("tim 取消")
     async def cancel_task(self, event: AstrMessageEvent, task_id: int):
-        """
-        取消指定任务
-        示例: tim 取消 1
-        """
         umo = event.unified_msg_origin
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
@@ -263,10 +228,6 @@ class TimPlugin(Star):
 
     @filter.command("tim 暂停")
     async def pause_task(self, event: AstrMessageEvent, task_id: int):
-        """
-        暂停指定任务
-        示例: tim 暂停 1
-        """
         umo = event.unified_msg_origin
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
@@ -279,10 +240,6 @@ class TimPlugin(Star):
 
     @filter.command("tim 启用")
     async def enable_task(self, event: AstrMessageEvent, task_id: int):
-        """
-        启用被暂停的任务
-        示例: tim 启用 1
-        """
         umo = event.unified_msg_origin
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
@@ -295,10 +252,6 @@ class TimPlugin(Star):
 
     @filter.command("tim 清空")
     async def clear_content(self, event: AstrMessageEvent, task_id: int):
-        """
-        清空指定任务的发送内容
-        示例: tim 清空 1
-        """
         umo = event.unified_msg_origin
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
@@ -311,10 +264,6 @@ class TimPlugin(Star):
 
     @filter.command("tim 列出任务")
     async def list_tasks(self, event: AstrMessageEvent):
-        """
-        列出当前会话中所有已创建的任务
-        示例: tim 列出任务
-        """
         umo = event.unified_msg_origin
         if umo not in self.tasks or not self.tasks[umo]:
             yield event.plain_result("当前会话中没有设置任何任务。")
@@ -329,10 +278,6 @@ class TimPlugin(Star):
 
     @filter.command("tim help")
     async def show_help(self, event: AstrMessageEvent):
-        """
-        显示定时任务插件的帮助信息
-        示例: tim help
-        """
         help_msg = (
             "定时任务插件帮助信息：\n"
             "1. tim 设置定时 <任务种类> <时间> <发送内容>\n"
