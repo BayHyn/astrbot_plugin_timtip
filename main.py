@@ -5,9 +5,10 @@ import asyncio
 import logging
 import sys
 from datetime import datetime, timedelta
-from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
 import astrbot.api.message_components as Comp  # 包含 Plain、Image 等组件
+
 
 # 日志文件路径
 log_file = "./data/plugins/astrbot_plugin_timtip/bot.log"
@@ -167,19 +168,22 @@ class TimPlugin(Star):
             await asyncio.sleep(1)
 
     async def send_task_message(self, task: dict):
-        """构造消息链并发送任务消息"""
-        target = task.get("target")
-        content = task.get("content")
-        if target and content:
-            chain = self.__class__.parse_message(content)
-            logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
-            try:
-                await self.context.send_message(target, chain)
-                logging.debug("消息发送成功")
-            except Exception as e:
-                logging.error("发送消息时出错: %s", e)
-        else:
-            logging.error("任务内容或目标为空，无法发送消息。")
+    """构造消息链并发送任务消息"""
+    target = task.get("target")
+    content = task.get("content")
+    if target and content:
+        # 先生成一个组件列表（这里只生成纯文本消息）
+        components = self.__class__.parse_message(content)
+        # 用 MessageChain 包装这些组件
+        chain = MessageChain(components)
+        logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
+        try:
+            await self.context.send_message(target, chain)
+            logging.debug("消息发送成功")
+        except Exception as e:
+            logging.error("发送消息时出错: %s", e)
+    else:
+        logging.error("任务内容或目标为空，无法发送消息。")
 
     # 指令组 "tim"
     @filter.command_group("tim")
