@@ -190,7 +190,7 @@ class TimPlugin(Star):
     def tim(self):
         pass
 
-    @tim.command("tim设置定时", alias={'定时', '设置'})
+    @tim.command("设置定时", alias={'定时', '设置'})
     async def set_timing(self, event: AstrMessageEvent, task_type: str, time_value: str, content: str = ""):
         """
         添加定时任务并设置发送内容（一步到位）
@@ -259,7 +259,7 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @tim.command("tim 取消", alias={'取消任务'})
+    @tim.command("取消", alias={'取消任务'})
     async def cancel_task(self, event: AstrMessageEvent, task_id: int):
         """
         取消指定任务
