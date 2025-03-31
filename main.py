@@ -204,6 +204,13 @@ class TimPlugin(Star):
           once: 延迟指定分钟后发送一次
         """
         logging.debug("set_timing 参数：task_type=%s, time_value=%s, content=%s", task_type, time_value, content)
+        # 参数验证
+        if not task_type.strip():
+            yield event.plain_result("任务类型不能为空，请输入任务类型。")
+            return
+        if not time_value.strip():
+            yield event.plain_result("时间参数不能为空，请输入时间参数。")
+            return
         if task_type == "fixed":
             try:
                 self.__class__.parse_time(time_value)
@@ -218,6 +225,10 @@ class TimPlugin(Star):
                 return
         else:
             yield event.plain_result("未知的任务类型，请使用 interval, fixed 或 once。")
+            return
+
+        if not content.strip():
+            yield event.plain_result("发送内容不能为空，请输入发送内容。")
             return
 
         now = datetime.utcnow() + timedelta(hours=8)
@@ -249,6 +260,14 @@ class TimPlugin(Star):
         编辑指定任务的发送内容
         示例: tim 编辑信息 1 新的发送信息
         """
+        # 参数验证
+        if not str(task_id).strip():
+            yield event.plain_result("任务编号不能为空，请输入任务编号。")
+            return
+        if not new_content.strip():
+            yield event.plain_result("发送信息不能为空，请输入新的发送信息。")
+            return
+
         umo = event.unified_msg_origin
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
@@ -363,5 +382,3 @@ class TimPlugin(Star):
             "更多用法请访问 https://github.com/IGCrystal/astrbot_plugin_timtip \n"
         )
         yield event.plain_result(help_msg)
-
-
