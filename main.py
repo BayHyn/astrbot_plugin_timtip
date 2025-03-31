@@ -176,10 +176,8 @@ class TimPlugin(Star):
         if target and content:
             # 生成组件列表（这里只生成纯文本消息）
             components = self.__class__.parse_message(content)
-            # 创建一个 MessageChain 对象，并逐个添加组件
-            chain = MessageChain()
-            for comp in components:
-                chain.append(comp)
+            # 使用 MessageChain 的 message() 方法构造消息链
+            chain = MessageChain().message(content)
             logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
             try:
                 await self.context.send_message(target, chain)
@@ -208,8 +206,6 @@ class TimPlugin(Star):
           once: 延迟指定分钟后发送一次
         """
         logging.debug("set_timing 参数：task_type=%s, time_value=%s, content=%s", task_type, time_value, content)
-
-        # 校验任务类型及时间参数
         if task_type == "fixed":
             try:
                 self.__class__.parse_time(time_value)
