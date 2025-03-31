@@ -284,6 +284,23 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
+    @tim.command("列出任务")
+    async def list_tasks(self, event: AstrMessageEvent):
+        """
+        列出当前会话中所有已创建的任务
+        示例: tim 列出任务
+        """
+        umo = event.unified_msg_origin
+        if umo not in self.tasks or not self.tasks[umo]:
+            yield event.plain_result("当前会话中没有设置任何任务。")
+            return
+        msg = "当前会话任务列表：\n"
+        for tid, task in self.tasks[umo].items():
+            msg += f"任务 {tid} - 类型: {task['type']}, 时间参数: {task['time']}, 状态: {task['status']}\n"
+            if task["content"]:
+                msg += f"    内容: {task['content']}\n"
+        yield event.plain_result(msg)
+
     @tim.command("help")
     async def show_help(self, event: AstrMessageEvent):
         """
@@ -301,6 +318,7 @@ class TimPlugin(Star):
             "4. tim 暂停 <任务编号>              -- 暂停任务\n"
             "5. tim 启用 <任务编号>              -- 启用被暂停的任务\n"
             "6. tim 清空 <任务编号>              -- 清空任务发送内容\n"
-            "7. tim help                       -- 显示此帮助信息"
+            "7. tim 列出任务                   -- 列出当前会话中所有任务\n"
+            "8. tim help                       -- 显示此帮助信息"
         )
         yield event.plain_result(help_msg)
