@@ -8,7 +8,7 @@
 
 ## 简介
 
-本插件基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot)) 框架，提供定时发送消息的功能。  
+本插件基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 框架，提供定时发送消息的功能。  
 插件支持多种任务类型：
 - **interval**：每隔指定分钟发送一次消息。
 - **fixed**：每天在指定时间发送消息（格式：HH时MM分，UTC+8）。
