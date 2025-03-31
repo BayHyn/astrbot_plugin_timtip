@@ -50,8 +50,19 @@ class TimPlugin(Star):
         self.executed_tasks = set()
         self.last_day = (datetime.utcnow() + timedelta(hours=8)).day
         # 启动后台调度器
-        asyncio.create_task(self.scheduler_loop())
+        self.scheduler_task = asyncio.create_task(self.scheduler_loop())
         logging.debug("TimPlugin 初始化完成，定时任务调度器已启动")
+
+    async def terminate(self):
+        """
+        插件卸载时调用，取消后台调度器任务，防止重载后产生多个调度器。
+        """
+        if hasattr(self, "scheduler_task"):
+            self.scheduler_task.cancel()
+            try:
+                await self.scheduler_task
+            except asyncio.CancelledError:
+                logging.debug("调度器任务已成功取消")
 
     @staticmethod
     def load_tasks() -> dict:
