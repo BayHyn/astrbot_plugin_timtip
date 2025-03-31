@@ -25,7 +25,8 @@ def load_tasks():
     try:
         with open(TIM_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        print("读取 tim.json 文件失败：", e)
         return {}
 
 def save_tasks(tasks: dict):
@@ -81,7 +82,7 @@ class TimPlugin(Star):
         super().__init__(context)
         # 按会话存储任务：{umo: {task_id(str): task_data(dict), ...}, ...}
         self.tasks = load_tasks()
-        # 全局任务编号，从 1 开始
+        # 全局任务编号从 1 开始
         self.next_id = 1
         for task_dict in self.tasks.values():
             for tid in task_dict.keys():
@@ -105,11 +106,13 @@ class TimPlugin(Star):
                 self.executed_tasks.clear()
                 self.last_day = current_day
 
+            # 遍历每个会话的任务
             for umo, task_dict in self.tasks.items():
                 for tid, task in list(task_dict.items()):
-                    # 检查任务是否为 active 且内容不为空（去掉前后空白）
+                    # 仅处理状态为 active 且内容非空的任务
                     if task.get("status", "active") != "active" or not task.get("content", "").strip():
                         continue
+
                     task_type = task.get("type")
                     last_run = task.get("last_run")
                     last_run_dt = datetime.fromisoformat(last_run) if last_run else None
@@ -120,7 +123,7 @@ class TimPlugin(Star):
                         except ValueError:
                             continue
                         diff = (now - last_run_dt).total_seconds() if last_run_dt else None
-                        print(f"检查任务 {tid}: 当前时间差 = {diff}秒, 需 {interval*60}秒")
+                        print(f"检查任务 {tid}: 当前时间差 = {diff}秒, 要求 {interval*60}秒")
                         if last_run_dt is None or (now - last_run_dt).total_seconds() >= interval * 60:
                             await self.send_task_message(task)
                             task["last_run"] = now.isoformat()
@@ -132,6 +135,7 @@ class TimPlugin(Star):
                         create_time = datetime.fromisoformat(task.get("create_time"))
                         if now >= create_time + timedelta(minutes=delay):
                             await self.send_task_message(task)
+                            # 删除 once 任务执行后
                             del task_dict[tid]
                     elif task_type == "fixed":
                         try:
@@ -155,7 +159,7 @@ class TimPlugin(Star):
             chain = parse_message(content)
             await self.context.send_message(target, chain)
 
-    # 定义指令组 "tim"
+    # 指令组 "tim"
     @filter.command_group("tim")
     def tim(self):
         pass
@@ -196,7 +200,7 @@ class TimPlugin(Star):
         task_data = {
             "type": task_type,
             "time": time_value,
-            "content": "",  # 初始为空
+            "content": "",  # 初始为空，后续使用设置内容命令更新
             "status": "active",
             "create_time": now.isoformat(),
             "last_run": None,
