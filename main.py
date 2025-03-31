@@ -97,7 +97,7 @@ class TimPlugin(Star):
         asyncio.create_task(self.scheduler_loop())
 
     async def scheduler_loop(self):
-        """后台调度器，每 10 秒检查一次所有会话中的任务条件"""
+        """后台调度器，每 1 秒检查一次所有会话中的任务条件"""
         while True:
             now = datetime.utcnow() + timedelta(hours=8)
             current_day = now.day
@@ -144,7 +144,7 @@ class TimPlugin(Star):
                             task["last_run"] = now.isoformat()
                             self.executed_tasks.add(exec_id)
             save_tasks(self.tasks)
-            await asyncio.sleep(10)
+            await asyncio.sleep(1)
 
     async def send_task_message(self, task: dict):
         """构造消息链并发送任务消息"""
