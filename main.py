@@ -17,7 +17,7 @@ def load_tasks():
         try:
             os.makedirs(os.path.dirname(TIM_FILE), exist_ok=True)
             with open(TIM_FILE, "w", encoding="utf-8") as f:
-                # 初始化为空字典，用于按会话存储任务：{umo: {task_id: task_data, ...}, ...}
+                # 按会话存储任务：{umo: {task_id: task_data, ...}, ...}
                 json.dump({}, f, ensure_ascii=False, indent=4)
         except Exception as e:
             print("创建 tim.json 文件失败：", e)
@@ -79,10 +79,10 @@ def parse_message(content: str):
 class TimPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        # 按会话存储任务，格式: { umo: { task_id(str): task_data(dict), ... }, ... }
+        # 按会话存储任务：{umo: {task_id(str): task_data(dict), ...}, ...}
         self.tasks = load_tasks()
-        # 全局任务编号（跨会话唯一）
-        self.next_id = 0
+        # 全局任务编号，从 1 开始
+        self.next_id = 1
         for task_dict in self.tasks.values():
             for tid in task_dict.keys():
                 try:
@@ -105,11 +105,10 @@ class TimPlugin(Star):
                 self.executed_tasks.clear()
                 self.last_day = current_day
 
-            # 遍历每个会话
             for umo, task_dict in self.tasks.items():
-                # 遍历该会话下所有任务
                 for tid, task in list(task_dict.items()):
-                    if task.get("status", "active") != "active" or not task.get("content"):
+                    # 检查任务是否为 active 且内容不为空（去掉前后空白）
+                    if task.get("status", "active") != "active" or not task.get("content", "").strip():
                         continue
                     task_type = task.get("type")
                     last_run = task.get("last_run")
@@ -120,6 +119,8 @@ class TimPlugin(Star):
                             interval = float(task.get("time"))
                         except ValueError:
                             continue
+                        diff = (now - last_run_dt).total_seconds() if last_run_dt else None
+                        print(f"检查任务 {tid}: 当前时间差 = {diff}秒, 需 {interval*60}秒")
                         if last_run_dt is None or (now - last_run_dt).total_seconds() >= interval * 60:
                             await self.send_task_message(task)
                             task["last_run"] = now.isoformat()
