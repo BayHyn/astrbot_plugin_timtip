@@ -54,10 +54,7 @@
 
 - **任务数据文件**  
   任务数据存储在插件目录下的 `tim.json` 文件中，格式为 JSON。
-
-- **日志文件**  
-  日志文件位于 `./data/plugins/astrbot_plugin_timtip/bot.log`，可以修改日志文件路径和级别。
-
+  
 
 
 ## 命令使用示例
