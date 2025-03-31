@@ -164,19 +164,20 @@ class TimPlugin(Star):
     def tim(self):
         pass
 
-    @tim.command("定时任务")
-    async def add_task(self, event: AstrMessageEvent, task_type: str, time_value: str):
+    @tim.command("设置定时")
+    async def set_timing(self, event: AstrMessageEvent, task_type: str, time_value: str, *, content: str):
         """
-        添加定时任务
+        添加定时任务并设置发送内容（一步到位）
         示例:
-          tim 定时任务 interval 5
-          tim 定时任务 fixed 20时30分
-          tim 定时任务 once 10
+          tim 设置定时 interval 5 第一行\n第二行 [img]https://example.com/image.jpg[/img]
+          tim 设置定时 fixed 20时30分 快到点了，该发送啦！
+          tim 设置定时 once 10 临时提醒：快吃饭喵~
         任务类型：
           interval: 每隔指定分钟发送
           fixed: 每天在指定时间发送 (格式: HH时MM分，UTC+8)
           once: 延迟指定分钟后发送一次
         """
+        # 校验任务类型及时间参数
         if task_type == "fixed":
             try:
                 parse_time(time_value)
@@ -200,7 +201,7 @@ class TimPlugin(Star):
         task_data = {
             "type": task_type,
             "time": time_value,
-            "content": "",  # 初始为空，后续使用设置内容命令更新
+            "content": content,  # 直接设定发送内容
             "status": "active",
             "create_time": now.isoformat(),
             "last_run": None,
@@ -211,23 +212,8 @@ class TimPlugin(Star):
         self.tasks[umo][task_id] = task_data
         save_tasks(self.tasks)
         msg = f"任务 {task_id} 已添加（会话: {umo}），类型: {task_type}，时间参数: {time_value}。\n"
-        msg += "注意：您还未设置发送内容，请使用 'tim 设置内容 <任务编号> <内容>' 命令设置。"
+        msg += "发送内容已设定，无需再单独设置。"
         yield event.plain_result(msg)
-
-    @tim.command("设置内容")
-    async def set_content(self, event: AstrMessageEvent, task_id: int, *, content: str):
-        """
-        设置指定任务的发送内容
-        示例: tim 设置内容 1 第一行\n第二行 [img]https://example.com/image.jpg[/img]
-        """
-        umo = event.unified_msg_origin
-        tid = str(task_id)
-        if umo not in self.tasks or tid not in self.tasks[umo]:
-            yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
-            return
-        self.tasks[umo][tid]["content"] = content
-        save_tasks(self.tasks)
-        yield event.plain_result(f"任务 {tid} 的发送内容已设置。")
 
     @tim.command("取消")
     async def cancel_task(self, event: AstrMessageEvent, task_id: int):
@@ -314,16 +300,15 @@ class TimPlugin(Star):
         """
         help_msg = (
             "定时任务插件帮助信息：\n"
-            "1. tim 定时任务 <任务种类> <时间>\n"
-            "   - interval: 每隔指定分钟发送 (示例: tim 定时任务 interval 5)\n"
-            "   - fixed: 每天在指定时间发送，格式 HH时MM分 (示例: tim 定时任务 fixed 20时30分)\n"
-            "   - once: 延迟指定分钟后发送一次 (示例: tim 定时任务 once 10)\n"
-            "2. tim 设置内容 <任务编号> <内容>  -- 设置任务发送内容（支持换行和 [img]图片URL[/img] 标记）\n"
-            "3. tim 取消 <任务编号>              -- 取消任务\n"
-            "4. tim 暂停 <任务编号>              -- 暂停任务\n"
-            "5. tim 启用 <任务编号>              -- 启用被暂停的任务\n"
-            "6. tim 清空 <任务编号>              -- 清空任务发送内容\n"
-            "7. tim 列出任务                   -- 列出当前会话中所有任务\n"
-            "8. tim help                       -- 显示此帮助信息"
+            "1. tim 设置定时 <任务种类> <时间> <发送内容>\n"
+            "   - interval: 每隔指定分钟发送 (示例: tim 设置定时 interval 5 第一行\\n第二行 [img]https://example.com/image.jpg[/img])\n"
+            "   - fixed: 每天在指定时间发送，格式 HH时MM分 (示例: tim 设置定时 fixed 20时30分 快到点了，该发送啦！)\n"
+            "   - once: 延迟指定分钟后发送一次 (示例: tim 设置定时 once 10 临时提醒：快吃饭喵~)\n"
+            "2. tim 取消 <任务编号>              -- 取消任务\n"
+            "3. tim 暂停 <任务编号>              -- 暂停任务\n"
+            "4. tim 启用 <任务编号>              -- 启用被暂停的任务\n"
+            "5. tim 清空 <任务编号>              -- 清空任务发送内容\n"
+            "6. tim 列出任务                   -- 列出当前会话中所有任务\n"
+            "7. tim help                       -- 显示此帮助信息"
         )
         yield event.plain_result(help_msg)
