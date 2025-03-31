@@ -2,86 +2,40 @@ import os
 import re
 import json
 import asyncio
+import logging
+import sys
 from datetime import datetime, timedelta
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 import astrbot.api.message_components as Comp  # 包含 Plain、Image 等组件
 
-# 设置 tim.json 的路径：假设当前工作目录为 AstrBot-master，
-# 则文件路径为 AstrBot-master/data/plugins/astrbot_plugin_timtip/tim.json
-BASE_DIR = os.getcwd()
-TIM_FILE = os.path.join(BASE_DIR, "data", "plugins", "astrbot_plugin_timtip", "tim.json")
+# 日志文件路径
+log_file = "./data/plugins/astrbot_plugin_timtip/bot.log"
 
-def load_tasks():
-    if not os.path.exists(TIM_FILE):
-        try:
-            os.makedirs(os.path.dirname(TIM_FILE), exist_ok=True)
-            with open(TIM_FILE, "w", encoding="utf-8") as f:
-                # 按会话存储任务：{umo: {task_id: task_data, ...}, ...}
-                json.dump({}, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print("创建 tim.json 文件失败：", e)
-        return {}
-    try:
-        with open(TIM_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print("读取 tim.json 文件失败：", e)
-        return {}
+# 配置日志：同时写入文件和输出到控制台
+logging.basicConfig(
+    level=logging.DEBUG,  # 记录 DEBUG 及以上级别的日志
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(log_file, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout)  # 输出到控制台
+    ]
+)
 
-def save_tasks(tasks: dict):
-    try:
-        with open(TIM_FILE, "w", encoding="utf-8") as f:
-            json.dump(tasks, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        print("保存 tim.json 失败：", e)
+logging.info("日志系统初始化完成，日志文件路径: %s", log_file)
 
-def parse_time(time_str: str) -> tuple:
-    """
-    解析固定时间格式，要求格式为 "HH时MM分"
-    返回 (hour, minute)
-    """
-    pattern = r'^(\d{1,2})时(\d{1,2})分$'
-    match = re.match(pattern, time_str)
-    if not match:
-        raise ValueError("固定时间格式错误，请使用 'HH时MM分' 格式，例如 20时30分。")
-    hour = int(match.group(1))
-    minute = int(match.group(2))
-    if not (0 <= hour < 24 and 0 <= minute < 60):
-        raise ValueError("固定时间范围错误，小时应在 0-23 之间，分钟应在 0-59 之间。")
-    return hour, minute
 
-def parse_message(content: str):
-    """
-    将用户输入内容解析为消息链：
-    - 文本中的换行符会被 Plain 消息段保留
-    - 使用 [img]URL[/img] 标记表示图片
-    """
-    chain = []
-    pattern = re.compile(r'\[img\](.*?)\[/img\]')
-    pos = 0
-    for m in pattern.finditer(content):
-        start, end = m.span()
-        if start > pos:
-            text_part = content[pos:start]
-            if text_part.strip():
-                chain.append(Comp.Plain(text_part))
-        img_url = m.group(1).strip()
-        if img_url:
-            chain.append(Comp.Image.fromURL(img_url))
-        pos = end
-    if pos < len(content):
-        text_part = content[pos:]
-        if text_part.strip():
-            chain.append(Comp.Plain(text_part))
-    return chain
-
-@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息插件", "1.1.1", "https://github.com/IGCrystal/astrbot_plugin_timtip")
+@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息插件", "1.1.1",
+          "https://github.com/IGCrystal/astrbot_plugin_timtip")
 class TimPlugin(Star):
+    # 使用 __file__ 的目录作为基准路径，并转换为绝对路径
+    TIM_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "tim.json"))
+
     def __init__(self, context: Context):
         super().__init__(context)
         # 按会话存储任务：{umo: {task_id(str): task_data(dict), ...}, ...}
-        self.tasks = load_tasks()
+        self.tasks = self.__class__.load_tasks()
         # 全局任务编号从 1 开始
         self.next_id = 1
         for task_dict in self.tasks.values():
@@ -95,21 +49,77 @@ class TimPlugin(Star):
         # 记录已执行 fixed 任务标识，格式: "{umo}_{task_id}_{day}_{hour}_{minute}"
         self.executed_tasks = set()
         self.last_day = (datetime.utcnow() + timedelta(hours=8)).day
+        # 启动后台调度器
         asyncio.create_task(self.scheduler_loop())
+        logging.debug("TimPlugin 初始化完成，定时任务调度器已启动")
+
+    @staticmethod
+    def load_tasks() -> dict:
+        if not os.path.exists(TimPlugin.TIM_FILE):
+            try:
+                os.makedirs(os.path.dirname(TimPlugin.TIM_FILE), exist_ok=True)
+                with open(TimPlugin.TIM_FILE, "w", encoding="utf-8") as f:
+                    json.dump({}, f, ensure_ascii=False, indent=4)
+                logging.debug("tim.json 文件不存在，已创建空任务文件。")
+            except Exception as e:
+                logging.error("创建 tim.json 文件失败：%s", e)
+            return {}
+        try:
+            with open(TimPlugin.TIM_FILE, "r", encoding="utf-8") as f:
+                tasks = json.load(f)
+                logging.debug("加载任务成功，任务数：%d", sum(len(v) for v in tasks.values()))
+                return tasks
+        except Exception as e:
+            logging.error("读取 tim.json 文件失败：%s", e)
+            return {}
+
+    @staticmethod
+    def save_tasks(tasks: dict):
+        try:
+            with open(TimPlugin.TIM_FILE, "w", encoding="utf-8") as f:
+                json.dump(tasks, f, ensure_ascii=False, indent=4)
+            logging.debug("任务保存成功。")
+        except Exception as e:
+            logging.error("保存 tim.json 失败：%s", e)
+
+    @staticmethod
+    def parse_time(time_str: str) -> tuple:
+        """
+        解析固定时间格式，要求格式为 "HH时MM分"
+        返回 (hour, minute)
+        """
+        pattern = r'^(\d{1,2})时(\d{1,2})分$'
+        match = re.match(pattern, time_str)
+        if not match:
+            raise ValueError("固定时间格式错误，请使用 'HH时MM分' 格式，例如 20时30分。")
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        if not (0 <= hour < 24 and 0 <= minute < 60):
+            raise ValueError("固定时间范围错误，小时应在 0-23 之间，分钟应在 0-59 之间。")
+        return hour, minute
+
+    @staticmethod
+    def parse_message(content: str):
+        """
+        将用户输入内容解析为消息链，只发送纯文本消息，不处理 [img] 标签。
+        """
+        return [Comp.Plain(content)]
 
     async def scheduler_loop(self):
         """后台调度器，每 1 秒检查一次所有会话中的任务条件"""
         while True:
             now = datetime.utcnow() + timedelta(hours=8)
             current_day = now.day
+            logging.debug("调度器循环运行中，当前时间: %s", now.isoformat())
             if current_day != self.last_day:
                 self.executed_tasks.clear()
                 self.last_day = current_day
+                logging.debug("新的一天，清空固定任务执行记录。")
 
             # 遍历每个会话的任务
             for umo, task_dict in self.tasks.items():
+                logging.debug("检查会话 %s 下的任务: %s", umo, task_dict)
                 for tid, task in list(task_dict.items()):
-                    # 仅处理状态为 active 且内容非空的任务
                     if task.get("status", "active") != "active" or not task.get("content", "").strip():
                         continue
 
@@ -121,34 +131,39 @@ class TimPlugin(Star):
                         try:
                             interval = float(task.get("time"))
                         except ValueError:
+                            logging.error("任务 %s 时间参数解析失败。", tid)
                             continue
                         diff = (now - last_run_dt).total_seconds() if last_run_dt else None
-                        print(f"检查任务 {tid}: 当前时间差 = {diff}秒, 要求 {interval*60}秒")
+                        logging.debug("检查任务 %s: 当前时间差 = %s秒, 要求 %s秒", tid, diff, interval * 60)
                         if last_run_dt is None or (now - last_run_dt).total_seconds() >= interval * 60:
+                            logging.debug("任务 %s 满足条件，准备发送消息。", tid)
                             await self.send_task_message(task)
                             task["last_run"] = now.isoformat()
                     elif task_type == "once":
                         try:
                             delay = float(task.get("time"))
                         except ValueError:
+                            logging.error("任务 %s 时间参数解析失败。", tid)
                             continue
                         create_time = datetime.fromisoformat(task.get("create_time"))
                         if now >= create_time + timedelta(minutes=delay):
+                            logging.debug("一次性任务 %s 到达发送时间，准备发送消息。", tid)
                             await self.send_task_message(task)
-                            # 删除 once 任务执行后
+                            logging.debug("一次性任务 %s 执行后将被删除。", tid)
                             del task_dict[tid]
                     elif task_type == "fixed":
                         try:
-                            hour, minute = parse_time(task.get("time"))
+                            hour, minute = self.__class__.parse_time(task.get("time"))
                         except ValueError as e:
-                            print(f"任务 {tid} 时间格式错误: {e}")
+                            logging.error("任务 %s 时间格式错误: %s", tid, e)
                             continue
                         exec_id = f"{umo}_{tid}_{current_day}_{hour}_{minute}"
                         if now.hour == hour and now.minute == minute and exec_id not in self.executed_tasks:
+                            logging.debug("固定任务 %s 满足条件，准备发送消息。", tid)
                             await self.send_task_message(task)
                             task["last_run"] = now.isoformat()
                             self.executed_tasks.add(exec_id)
-            save_tasks(self.tasks)
+            self.__class__.save_tasks(self.tasks)
             await asyncio.sleep(1)
 
     async def send_task_message(self, task: dict):
@@ -156,31 +171,40 @@ class TimPlugin(Star):
         target = task.get("target")
         content = task.get("content")
         if target and content:
-            chain = parse_message(content)
-            await self.context.send_message(target, chain)
+            chain = self.__class__.parse_message(content)
+            logging.debug("准备发送任务消息到目标 %s，内容: %s", target, content)
+            try:
+                await self.context.send_message(target, chain)
+                logging.debug("消息发送成功")
+            except Exception as e:
+                logging.error("发送消息时出错: %s", e)
+        else:
+            logging.error("任务内容或目标为空，无法发送消息。")
 
     # 指令组 "tim"
     @filter.command_group("tim")
     def tim(self):
         pass
 
-    @tim.command("设置定时")
-    async def set_timing(self, event: AstrMessageEvent, task_type: str, time_value: str, *, content: str):
+    @filter.command("tim 设置定时")
+    async def set_timing(self, event: AstrMessageEvent, task_type: str, time_value: str, content: str = ""):
         """
         添加定时任务并设置发送内容（一步到位）
         示例:
-          tim 设置定时 interval 5 第一行\n第二行 [img]https://example.com/image.jpg[/img]
-          tim 设置定时 fixed 20时30分 快到点了，该发送啦！
-          tim 设置定时 once 10 临时提醒：快吃饭喵~
+        tim 设置定时 interval 5 第一行\n第二行
+        tim 设置定时 fixed 20时30分 快到点了，该发送啦！
+        tim 设置定时 once 10 临时提醒：快吃饭喵~
         任务类型：
-          interval: 每隔指定分钟发送
-          fixed: 每天在指定时间发送 (格式: HH时MM分，UTC+8)
-          once: 延迟指定分钟后发送一次
+        interval: 每隔指定分钟发送
+        fixed: 每天在指定时间发送 (格式: HH时MM分，UTC+8)
+        once: 延迟指定分钟后发送一次
         """
+        logging.debug("set_timing 参数：task_type=%s, time_value=%s, content=%s", task_type, time_value, content)
+
         # 校验任务类型及时间参数
         if task_type == "fixed":
             try:
-                parse_time(time_value)
+                self.__class__.parse_time(time_value)
             except ValueError as e:
                 yield event.plain_result(str(e))
                 return
@@ -198,10 +222,11 @@ class TimPlugin(Star):
         umo = event.unified_msg_origin
         if umo not in self.tasks:
             self.tasks[umo] = {}
+
         task_data = {
             "type": task_type,
             "time": time_value,
-            "content": content,  # 直接设定发送内容
+            "content": content,  # 发送内容
             "status": "active",
             "create_time": now.isoformat(),
             "last_run": None,
@@ -210,12 +235,13 @@ class TimPlugin(Star):
         task_id = str(self.next_id)
         self.next_id += 1
         self.tasks[umo][task_id] = task_data
-        save_tasks(self.tasks)
-        msg = f"任务 {task_id} 已添加（会话: {umo}），类型: {task_type}，时间参数: {time_value}。\n"
-        msg += "发送内容已设定，无需再单独设置。"
+        self.__class__.save_tasks(self.tasks)
+        logging.debug("添加任务 %s: %s", task_id, task_data)
+        msg = (f"任务 {task_id} 已添加（会话: {umo}），类型: {task_type}，时间参数: {time_value}。\n"
+               "发送内容已设定，无需再单独设置。")
         yield event.plain_result(msg)
 
-    @tim.command("取消")
+    @filter.command("tim 取消")
     async def cancel_task(self, event: AstrMessageEvent, task_id: int):
         """
         取消指定任务
@@ -225,12 +251,13 @@ class TimPlugin(Star):
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
             del self.tasks[umo][tid]
-            save_tasks(self.tasks)
+            self.__class__.save_tasks(self.tasks)
+            logging.debug("取消任务 %s", tid)
             yield event.plain_result(f"任务 {tid} 已取消。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @tim.command("暂停")
+    @filter.command("tim 暂停")
     async def pause_task(self, event: AstrMessageEvent, task_id: int):
         """
         暂停指定任务
@@ -240,12 +267,13 @@ class TimPlugin(Star):
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["status"] = "paused"
-            save_tasks(self.tasks)
+            self.__class__.save_tasks(self.tasks)
+            logging.debug("暂停任务 %s", tid)
             yield event.plain_result(f"任务 {tid} 已暂停。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @tim.command("启用")
+    @filter.command("tim 启用")
     async def enable_task(self, event: AstrMessageEvent, task_id: int):
         """
         启用被暂停的任务
@@ -255,12 +283,13 @@ class TimPlugin(Star):
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["status"] = "active"
-            save_tasks(self.tasks)
+            self.__class__.save_tasks(self.tasks)
+            logging.debug("启用任务 %s", tid)
             yield event.plain_result(f"任务 {tid} 已启用。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @tim.command("清空")
+    @filter.command("tim 清空")
     async def clear_content(self, event: AstrMessageEvent, task_id: int):
         """
         清空指定任务的发送内容
@@ -270,12 +299,13 @@ class TimPlugin(Star):
         tid = str(task_id)
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["content"] = ""
-            save_tasks(self.tasks)
+            self.__class__.save_tasks(self.tasks)
+            logging.debug("清空任务 %s 的内容", tid)
             yield event.plain_result(f"任务 {tid} 的发送内容已清空。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @tim.command("列出任务")
+    @filter.command("tim 列出任务")
     async def list_tasks(self, event: AstrMessageEvent):
         """
         列出当前会话中所有已创建的任务
@@ -290,9 +320,10 @@ class TimPlugin(Star):
             msg += f"任务 {tid} - 类型: {task['type']}, 时间参数: {task['time']}, 状态: {task['status']}\n"
             if task["content"]:
                 msg += f"    内容: {task['content']}\n"
+        logging.debug("列出任务：\n%s", msg)
         yield event.plain_result(msg)
 
-    @tim.command("help")
+    @filter.command("tim help")
     async def show_help(self, event: AstrMessageEvent):
         """
         显示定时任务插件的帮助信息
@@ -301,7 +332,7 @@ class TimPlugin(Star):
         help_msg = (
             "定时任务插件帮助信息：\n"
             "1. tim 设置定时 <任务种类> <时间> <发送内容>\n"
-            "   - interval: 每隔指定分钟发送 (示例: tim 设置定时 interval 5 第一行\\n第二行 [img]https://example.com/image.jpg[/img])\n"
+            "   - interval: 每隔指定分钟发送 (示例: tim 设置定时 interval 5 第一行\\n第二行)\n"
             "   - fixed: 每天在指定时间发送，格式 HH时MM分 (示例: tim 设置定时 fixed 20时30分 快到点了，该发送啦！)\n"
             "   - once: 延迟指定分钟后发送一次 (示例: tim 设置定时 once 10 临时提醒：快吃饭喵~)\n"
             "2. tim 取消 <任务编号>              -- 取消任务\n"
