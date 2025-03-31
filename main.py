@@ -323,7 +323,7 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @filter.command("tim 列出任务", alias={'列表', 'list', '队列', '当前任务', '任务'})
+    @filter.command("tim 列出任务", alias={'列表', 'list', '队列', '当前任务', '任务', '任务列表'})
     async def list_tasks(self, event: AstrMessageEvent):
         """
         列出当前会话中所有已创建的任务
@@ -341,7 +341,7 @@ class TimPlugin(Star):
         logging.debug("列出任务：\n%s", msg)
         yield event.plain_result(msg)
 
-    @filter.command("tim help", alias={'帮助'})
+    @filter.command("tim help", alias={'帮助', '帮助信息'})
     async def show_help(self, event: AstrMessageEvent):
         """
         显示定时任务插件的帮助信息
