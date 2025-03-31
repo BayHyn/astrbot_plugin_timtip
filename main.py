@@ -26,7 +26,7 @@ logging.basicConfig(
 logging.info("日志系统初始化完成，日志文件路径: %s", log_file)
 
 
-@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息插件", "1.1.1",
+@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息的插件喵~", "1.1.1",
           "https://github.com/IGCrystal/astrbot_plugin_timtip")
 class TimPlugin(Star):
     # 使用 __file__ 的目录作为基准路径，并转换为绝对路径
@@ -190,7 +190,7 @@ class TimPlugin(Star):
     def tim(self):
         pass
 
-    @filter.command("tim 设置定时")
+    @filter.command("tim 设置定时", alias={'定时', '设置'})
     async def set_timing(self, event: AstrMessageEvent, task_type: str, time_value: str, content: str = ""):
         """
         添加定时任务并设置发送内容（一步到位）
@@ -243,7 +243,23 @@ class TimPlugin(Star):
                "发送内容已设定，无需再单独设置。")
         yield event.plain_result(msg)
 
-    @filter.command("tim 取消")
+    @filter.command("tim 编辑信息", alias={'编辑', 'edit'})
+    async def edit_info(self, event: AstrMessageEvent, task_id: int, new_content: str = ""):
+        """
+        编辑指定任务的发送内容
+        示例: tim 编辑信息 1 新的发送信息
+        """
+        umo = event.unified_msg_origin
+        tid = str(task_id)
+        if umo in self.tasks and tid in self.tasks[umo]:
+            self.tasks[umo][tid]["content"] = new_content
+            self.__class__.save_tasks(self.tasks)
+            logging.debug("编辑任务 %s 的内容为: %s", tid, new_content)
+            yield event.plain_result(f"任务 {tid} 的发送内容已更新为: {new_content}")
+        else:
+            yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
+
+    @filter.command("tim 取消", alias={'取消任务'})
     async def cancel_task(self, event: AstrMessageEvent, task_id: int):
         """
         取消指定任务
@@ -259,7 +275,7 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @filter.command("tim 暂停")
+    @filter.command("tim 暂停", alias={'暂停任务'})
     async def pause_task(self, event: AstrMessageEvent, task_id: int):
         """
         暂停指定任务
@@ -275,7 +291,7 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @filter.command("tim 启用")
+    @filter.command("tim 启用", alias={'启用任务'})
     async def enable_task(self, event: AstrMessageEvent, task_id: int):
         """
         启用被暂停的任务
@@ -291,7 +307,7 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @filter.command("tim 清空")
+    @filter.command("tim 清空", alias={'清空信息'})
     async def clear_content(self, event: AstrMessageEvent, task_id: int):
         """
         清空指定任务的发送内容
@@ -307,7 +323,7 @@ class TimPlugin(Star):
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
 
-    @filter.command("tim 列出任务")
+    @filter.command("tim 列出任务", alias={'列表', 'list', '队列', '当前任务', '任务'})
     async def list_tasks(self, event: AstrMessageEvent):
         """
         列出当前会话中所有已创建的任务
@@ -325,7 +341,7 @@ class TimPlugin(Star):
         logging.debug("列出任务：\n%s", msg)
         yield event.plain_result(msg)
 
-    @filter.command("tim help")
+    @filter.command("tim help", alias={'帮助'})
     async def show_help(self, event: AstrMessageEvent):
         """
         显示定时任务插件的帮助信息
@@ -343,22 +359,9 @@ class TimPlugin(Star):
             "5. tim 清空 <任务编号>              -- 清空任务发送内容\n"
             "6. tim 列出任务                   -- 列出当前会话中所有任务\n"
             "7. tim 编辑信息 <任务编号> <发送信息>  -- 编辑指定任务的发送内容\n"
-            "8. tim help                       -- 显示此帮助信息"
+            "8. tim help                       -- 显示此帮助信息\n"
+            "更多用法请访问 https://github.com/IGCrystal/astrbot_plugin_timtip \n"
         )
         yield event.plain_result(help_msg)
 
-    @filter.command("tim 编辑信息")
-    async def edit_info(self, event: AstrMessageEvent, task_id: int, new_content: str = ""):
-        """
-        编辑指定任务的发送内容
-        示例: tim 编辑信息 1 新的发送信息
-        """
-        umo = event.unified_msg_origin
-        tid = str(task_id)
-        if umo in self.tasks and tid in self.tasks[umo]:
-            self.tasks[umo][tid]["content"] = new_content
-            self.__class__.save_tasks(self.tasks)
-            logging.debug("编辑任务 %s 的内容为: %s", tid, new_content)
-            yield event.plain_result(f"任务 {tid} 的发送内容已更新为: {new_content}")
-        else:
-            yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
+
