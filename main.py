@@ -29,7 +29,7 @@ logging.info("日志系统初始化完成，日志文件路径: %s", log_file)
 TIM_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "tim.json"))
 INFO_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "info.json"))
 
-@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息的插件喵~", "1.1.2",
+@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息的插件喵~（发送内容由 info.json 管理，按会话分组，修改后即时生效）", "1.1.3",
           "https://github.com/IGCrystal/astrbot_plugin_timtip")
 class TimPlugin(Star):
     def __init__(self, context: Context):
@@ -163,6 +163,10 @@ class TimPlugin(Star):
                             await self.send_task_message(umo, tid, task)
                             logging.debug("一次性任务 %s 执行后将被删除。", tid)
                             del task_dict[tid]
+                            # 同时删除对应会话下 info.json 中的发送内容
+                            if umo in self.infos and tid in self.infos[umo]:
+                                del self.infos[umo][tid]
+                                self.save_json(self.infos, INFO_FILE)
                     elif task_type == "fixed":
                         try:
                             hour, minute = self.parse_time(task.get("time"))
@@ -217,8 +221,8 @@ class TimPlugin(Star):
           fixed: 每天在指定时间发送 (支持格式：HH时MM分、HHMM、HH:MM，UTC+8)
           once: 延迟指定分钟后发送一次
 
-        注意：发送内容中的空格、换行及 emoji 会原样保留，请确保整体作为一个参数传递，
-        也可以在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
+        注意：从指令编辑发送内容无法包含空格、换行及 emoji，
+        你可以在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
         """
         # 参数验证
         if not task_type.strip():
@@ -275,7 +279,8 @@ class TimPlugin(Star):
         """
         编辑指定任务的发送内容（实际修改 info.json 中的内容）
         示例: tim 编辑信息 1 '新的发送信息'
-        注意：请用单引号或三引号包裹发送内容，确保空格、换行及双引号能原样保留。
+        注意：从指令编辑发送内容无法包含空格、换行及 emoji，
+        你可以在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
@@ -391,7 +396,6 @@ class TimPlugin(Star):
             "   - interval: 每隔指定分钟发送 (示例: tim 设置定时 interval 5 儿童节快乐)\n"
             "   - fixed: 每天在指定时间发送，格式 HH时MM分 (示例: tim 设置定时 fixed 20时30分 快到点了，该发送啦！)\n"
             "   - once: 延迟指定分钟后发送一次 (示例: tim 设置定时 once 10 临时提醒：快吃饭喵~)\n"
-            "   支持修改info.json文件来编辑发送信息\n"
             "2. tim 编辑信息 <任务编号> <新的发送内容>  -- 修改 info.json 中对应任务的发送内容（修改后即时生效）\n"
             "3. tim 取消 <任务编号>              -- 取消任务\n"
             "4. tim 暂停 <任务编号>              -- 暂停任务\n"
