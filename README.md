@@ -1,6 +1,6 @@
 # AstrBot 定时发送消息插件喵~
 
-版本：1.1.3 
+版本：1.1.3
 作者：IGCrystal  
 仓库：[https://github.com/IGCrystal/astrbot_plugin_timtip](https://github.com/IGCrystal/astrbot_plugin_timtip)
 
