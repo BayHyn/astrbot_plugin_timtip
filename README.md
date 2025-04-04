@@ -1,8 +1,8 @@
 
 # AstrBot 定时发送消息插件喵~ 
 
-<img src="https://raw.githubusercontent.com/IGCrystal/IGCrystal/refs/heads/main/test/img/%E6%8F%92%E7%94%BB.jpg" width="500" height="500"></img>
-<img src="https://raw.githubusercontent.com/IGCrystal/IGCrystal/refs/heads/main/test/img/%E6%8F%92%E7%94%BB.png" width="500" height="500"></img>
+<img src="https://raw.githubusercontent.com/IGCrystal/IGCrystal/refs/heads/main/test/img/%E6%8F%92%E7%94%BB.jpg" width="200" height="200"></img>
+<img src="https://raw.githubusercontent.com/IGCrystal/IGCrystal/refs/heads/main/test/img/%E6%8F%92%E7%94%BB.png" width="200" height="200"></img>
 
 
 版本：1.1.3
