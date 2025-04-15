@@ -2,42 +2,29 @@ import os
 import re
 import json
 import asyncio
-import logging
-import sys
 from datetime import datetime, timedelta
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
+from astrbot.api import logger  # 使用 astrbot.api 提供的日志器喵♡～
 import astrbot.api.message_components as Comp  # 包含 Plain、Image 等组件
 
-# 日志文件路径
-log_file = "./data/plugins/astrbot_plugin_timtip/bot.log"
+# 设置基础目录为当前文件所在目录下的 data/plugins_data/astrbot_plugin_timtip
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "plugins_data", "astrbot_plugin_timtip"))
+os.makedirs(BASE_DIR, exist_ok=True)
 
-# 配置日志：同时写入文件和输出到控制台
-logging.basicConfig(
-    level=logging.DEBUG,  # 记录 DEBUG 及以上级别的日志
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.FileHandler(log_file, encoding="utf-8"),  # 写入日志文件
-        logging.StreamHandler(sys.stdout)  # 输出到控制台，方便调试
-    ]
-)
-
-logging.info("日志系统初始化完成，日志文件路径: %s", log_file)
-
-# 文件路径定义：tim.json 存任务信息，info.json 存各会话的发送内容
-TIM_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "tim.json"))
-INFO_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "info.json"))
+# 定义 JSON 文件路径，用于保存任务和发送内容数据
+TIM_FILE = os.path.join(BASE_DIR, "tim.json")
+INFO_FILE = os.path.join(BASE_DIR, "info.json")
 
 @register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息的插件喵~（发送内容由 info.json 管理，按会话分组，修改后即时生效）", "1.1.3",
           "https://github.com/IGCrystal/astrbot_plugin_timtip")
 class TimPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        # 加载任务数据，info.json 此处初始加载，仅用于初始化全局结构
+        # 加载任务数据和信息数据
         self.tasks = self.__class__.load_json(TIM_FILE)
         self.infos = self.__class__.load_json(INFO_FILE)
-        # 全局任务编号从 1 开始（任务编号在每个会话内唯一，但全局使用递增编号便于管理）
+        # 全局任务编号从 1 开始（每个会话内任务编号唯一，整体递增便于管理）
         self.next_id = 1
         for task_dict in self.tasks.values():
             for tid in task_dict.keys():
@@ -52,7 +39,7 @@ class TimPlugin(Star):
         self.last_day = (datetime.utcnow() + timedelta(hours=8)).day
         # 启动后台调度器
         self.scheduler_task = asyncio.create_task(self.scheduler_loop())
-        logging.debug("TimPlugin 初始化完成，定时任务调度器已启动")
+        logger.debug("TimPlugin 初始化完成，定时任务调度器已启动")
 
     async def terminate(self):
         """
@@ -63,7 +50,7 @@ class TimPlugin(Star):
             try:
                 await self.scheduler_task
             except asyncio.CancelledError:
-                logging.debug("调度器任务已成功取消")
+                logger.debug("调度器任务已成功取消")
 
     @staticmethod
     def load_json(file_path: str) -> dict:
@@ -72,15 +59,15 @@ class TimPlugin(Star):
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 with open(file_path, "w", encoding="utf-8") as f:
                     json.dump({}, f, ensure_ascii=False, indent=4)
-                logging.debug("文件 %s 不存在，已创建空文件。", file_path)
+                logger.debug("文件 %s 不存在，已创建空文件。", file_path)
             except Exception as e:
-                logging.error("创建 %s 失败：%s", file_path, e)
+                logger.error("创建 %s 失败：%s", file_path, e)
             return {}
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            logging.error("读取 %s 失败：%s", file_path, e)
+            logger.error("读取 %s 失败：%s", file_path, e)
             return {}
 
     @staticmethod
@@ -88,9 +75,9 @@ class TimPlugin(Star):
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-            logging.debug("保存 %s 成功。", file_path)
+            logger.debug("保存 %s 成功。", file_path)
         except Exception as e:
-            logging.error("保存 %s 失败：%s", file_path, e)
+            logger.error("保存 %s 失败：%s", file_path, e)
 
     @staticmethod
     def parse_time(time_str: str) -> tuple:
@@ -119,20 +106,20 @@ class TimPlugin(Star):
 
     async def scheduler_loop(self):
         """
-        后台调度器，每 1 秒检查一次所有会话中的任务条件
+        后台调度器，每 1 秒检查一次所有会话中的任务条件。
         """
         while True:
             now = datetime.utcnow() + timedelta(hours=8)
             current_day = now.day
-            logging.debug("调度器循环运行中，当前时间: %s", now.isoformat())
+            logger.debug("调度器循环运行中，当前时间: %s", now.isoformat())
             if current_day != self.last_day:
                 self.executed_tasks.clear()
                 self.last_day = current_day
-                logging.debug("新的一天，清空固定任务执行记录。")
+                logger.debug("新的一天，清空固定任务执行记录。")
 
             # 遍历每个会话的任务
             for umo, task_dict in self.tasks.items():
-                logging.debug("检查会话 %s 下的任务: %s", umo, task_dict)
+                logger.debug("检查会话 %s 下的任务: %s", umo, task_dict)
                 for tid, task in list(task_dict.items()):
                     # 仅处理状态为 active 的任务
                     if task.get("status", "active") != "active":
@@ -145,23 +132,23 @@ class TimPlugin(Star):
                         try:
                             interval = float(task.get("time"))
                         except ValueError:
-                            logging.error("任务 %s 时间参数解析失败。", tid)
+                            logger.error("任务 %s 时间参数解析失败。", tid)
                             continue
                         if last_run_dt is None or (now - last_run_dt).total_seconds() >= interval * 60:
-                            logging.debug("任务 %s 满足条件，准备发送消息。", tid)
+                            logger.debug("任务 %s 满足条件，准备发送消息。", tid)
                             await self.send_task_message(umo, tid, task)
                             task["last_run"] = now.isoformat()
                     elif task_type == "once":
                         try:
                             delay = float(task.get("time"))
                         except ValueError:
-                            logging.error("任务 %s 时间参数解析失败。", tid)
+                            logger.error("任务 %s 时间参数解析失败。", tid)
                             continue
                         create_time = datetime.fromisoformat(task.get("create_time"))
                         if now >= create_time + timedelta(minutes=delay):
-                            logging.debug("一次性任务 %s 到达发送时间，准备发送消息。", tid)
+                            logger.debug("一次性任务 %s 到达发送时间，准备发送消息。", tid)
                             await self.send_task_message(umo, tid, task)
-                            logging.debug("一次性任务 %s 执行后将被删除。", tid)
+                            logger.debug("一次性任务 %s 执行后将被删除。", tid)
                             del task_dict[tid]
                             # 同时删除对应会话下 info.json 中的发送内容
                             if umo in self.infos and tid in self.infos[umo]:
@@ -171,11 +158,11 @@ class TimPlugin(Star):
                         try:
                             hour, minute = self.parse_time(task.get("time"))
                         except ValueError as e:
-                            logging.error("任务 %s 时间格式错误: %s", tid, e)
+                            logger.error("任务 %s 时间格式错误: %s", tid, e)
                             continue
                         exec_id = f"{umo}_{tid}_{current_day}_{hour}_{minute}"
                         if now.hour == hour and now.minute == minute and exec_id not in self.executed_tasks:
-                            logging.debug("固定任务 %s 满足条件，准备发送消息。", tid)
+                            logger.debug("固定任务 %s 满足条件，准备发送消息。", tid)
                             await self.send_task_message(umo, tid, task)
                             task["last_run"] = now.isoformat()
                             self.executed_tasks.add(exec_id)
@@ -184,7 +171,7 @@ class TimPlugin(Star):
 
     async def send_task_message(self, umo: str, tid: str, task: dict):
         """
-        构造消息链并发送任务消息，每次发送前重新加载 info.json 确保最新修改生效
+        构造消息链并发送任务消息，每次发送前重新加载 info.json 确保最新修改生效。
         """
         target = task.get("target")
         # 每次发送前重新加载最新的发送内容数据
@@ -194,14 +181,14 @@ class TimPlugin(Star):
             content = latest_infos[umo].get(tid, "")
         if target and content:
             chain = MessageChain().message(content)
-            logging.debug("准备发送任务消息到目标 %s，任务 %s 内容: %s", target, tid, content)
+            logger.debug("准备发送任务消息到目标 %s，任务 %s 内容: %s", target, tid, content)
             try:
                 await self.context.send_message(target, chain)
-                logging.debug("任务 %s 消息发送成功", tid)
+                logger.debug("任务 %s 消息发送成功", tid)
             except Exception as e:
-                logging.error("任务 %s 发送消息时出错: %s", tid, e)
+                logger.error("任务 %s 发送消息时出错: %s", tid, e)
         else:
-            logging.error("任务 %s 的目标或发送内容为空，无法发送消息。", tid)
+            logger.error("任务 %s 的目标或发送内容为空，无法发送消息。", tid)
 
     # 指令组 "tim"
     @filter.command_group("tim")
@@ -221,8 +208,8 @@ class TimPlugin(Star):
           fixed: 每天在指定时间发送 (支持格式：HH时MM分、HHMM、HH:MM，UTC+8)
           once: 延迟指定分钟后发送一次
 
-        注意：从指令编辑发送内容无法包含空格、换行及 emoji，
-        你可以在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
+        注意：指令编辑发送内容无法包含空格、换行及 emoji，
+        可在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
         """
         # 参数验证
         if not task_type.strip():
@@ -279,8 +266,8 @@ class TimPlugin(Star):
         """
         编辑指定任务的发送内容（实际修改 info.json 中的内容）
         示例: tim 编辑信息 1 '新的发送信息'
-        注意：从指令编辑发送内容无法包含空格、换行及 emoji，
-        你可以在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
+        注意：指令编辑发送内容无法包含空格、换行及 emoji，
+        可在添加任务后直接编辑 info.json 中对应会话和任务编号的内容，修改后即时生效。
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
@@ -289,7 +276,7 @@ class TimPlugin(Star):
                 self.infos[umo] = {}
             self.infos[umo][tid] = new_content
             self.save_json(self.infos, INFO_FILE)
-            logging.debug("编辑任务 %s 的发送内容为: %s", tid, new_content)
+            logger.debug("编辑任务 %s 的发送内容为: %s", tid, new_content)
             yield event.plain_result(f"任务 {tid} 的发送内容已更新为：\n{new_content}")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
@@ -309,7 +296,7 @@ class TimPlugin(Star):
             if umo in self.infos and tid in self.infos[umo]:
                 del self.infos[umo][tid]
                 self.save_json(self.infos, INFO_FILE)
-            logging.debug("取消任务 %s", tid)
+            logger.debug("取消任务 %s", tid)
             yield event.plain_result(f"任务 {tid} 已取消。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
@@ -325,7 +312,7 @@ class TimPlugin(Star):
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["status"] = "paused"
             self.save_json(self.tasks, TIM_FILE)
-            logging.debug("暂停任务 %s", tid)
+            logger.debug("暂停任务 %s", tid)
             yield event.plain_result(f"任务 {tid} 已暂停。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
@@ -341,7 +328,7 @@ class TimPlugin(Star):
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["status"] = "active"
             self.save_json(self.tasks, TIM_FILE)
-            logging.debug("启用任务 %s", tid)
+            logger.debug("启用任务 %s", tid)
             yield event.plain_result(f"任务 {tid} 已启用。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
@@ -357,7 +344,7 @@ class TimPlugin(Star):
         if umo in self.infos and tid in self.infos[umo]:
             self.infos[umo][tid] = ""
             self.save_json(self.infos, INFO_FILE)
-            logging.debug("清空任务 %s 的发送内容", tid)
+            logger.debug("清空任务 %s 的发送内容", tid)
             yield event.plain_result(f"任务 {tid} 的发送内容已清空。")
         else:
             yield event.plain_result(f"任务 {tid} 在当前会话中不存在。")
@@ -381,7 +368,7 @@ class TimPlugin(Star):
                 content_preview = content_preview[:50] + "..."
             msg += f"任务 {tid} - 类型: {task['type']}, 时间参数: {task['time']}, 状态: {task['status']}\n"
             msg += f"    发送内容预览: {content_preview}\n"
-        logging.debug("列出任务：\n%s", msg)
+        logger.debug("列出任务：\n%s", msg)
         yield event.plain_result(msg)
 
     @tim.command("help", alias={'帮助', '帮助信息'})
