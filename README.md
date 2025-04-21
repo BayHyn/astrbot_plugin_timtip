@@ -1,8 +1,7 @@
 
 # AstrBot 定时发送消息插件喵~ 
 
-<img src="https://raw.githubusercontent.com/IGCrystal/IGCrystal/refs/heads/main/test/img/%E6%8F%92%E7%94%BB.jpg" width="200" height="200"></img>
-<img src="https://raw.githubusercontent.com/IGCrystal/IGCrystal/refs/heads/main/test/img/%E6%8F%92%E7%94%BB.png" width="200" height="200"></img>
+<img src="https://raw.githubusercontent.com/IGCyukira/IGCyukira/refs/heads/main/img/ChatGPT%20Image%202025%E5%B9%B44%E6%9C%8821%E6%97%A5%2017_32_36.png" width="100%"></img>
 
 
 版本：1.1.3
