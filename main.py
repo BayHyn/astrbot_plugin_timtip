@@ -7,9 +7,10 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger  # 使用 astrbot.api 提供的日志器喵♡～
 import astrbot.api.message_components as Comp  # 包含 Plain、Image 等组件
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-# 设置基础目录为当前文件所在目录下的 data/plugins_data/astrbot_plugin_timtip
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "plugins_data", "astrbot_plugin_timtip"))
+# 使用 AstrBot 提供的标准数据路径
+BASE_DIR = os.path.join(get_astrbot_data_path(), "plugins_data", "astrbot_plugin_timtip")
 os.makedirs(BASE_DIR, exist_ok=True)
 
 # 定义 JSON 文件路径，用于保存任务和发送内容数据
