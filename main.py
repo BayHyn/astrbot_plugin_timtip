@@ -18,7 +18,7 @@ os.makedirs(BASE_DIR, exist_ok=True)
 TIM_FILE = os.path.join(BASE_DIR, "tim.json")
 INFO_FILE = os.path.join(BASE_DIR, "info.json")
 
-@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息的插件喵~（发送内容由 info.json 管理，按会话分组，修改后即时生效）", "1.1.4",
+@register("astrbot_plugin_timtip", "IGCrystal", "定时发送消息的插件喵~（发送内容由 info.json 管理，按会话分组，修改后即时生效）", "1.1.5",
           "https://github.com/IGCrystal/astrbot_plugin_timtip")
 class TimPlugin(Star):
     def __init__(self, context: Context):
