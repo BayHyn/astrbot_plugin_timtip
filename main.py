@@ -7,6 +7,7 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger  # 使用 astrbot.api 提供的日志器喵♡～
 import astrbot.api.message_components as Comp  # 包含 Plain、Image 等组件
+from astrbot.core.platform.sources.dingtalk.dingtalk_event import DingtalkMessageEvent
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
 # 使用 AstrBot 提供的标准数据路径
@@ -25,6 +26,7 @@ class TimPlugin(Star):
         # 加载任务数据和信息数据
         self.tasks = self.__class__.load_json(TIM_FILE)
         self.infos = self.__class__.load_json(INFO_FILE)
+        self.trigger_event = None  # ← 新增这一行
         # 全局任务编号从 1 开始（每个会话内任务编号唯一，整体递增便于管理）
         self.next_id = 1
         for task_dict in self.tasks.values():
@@ -184,8 +186,12 @@ class TimPlugin(Star):
             chain = MessageChain().message(content)
             logger.debug("准备发送任务消息到目标 %s，任务 %s 内容: %s", target, tid, content)
             try:
-                await self.context.send_message(target, chain)
-                logger.debug("任务 %s 消息发送成功", tid)
+
+                if self.trigger_event:
+                    await self.trigger_event.send(chain)
+                    logger.debug("任务 %s 消息发送成功", tid)
+                else:
+                    logger.error("没有可用的 event 上下文，无法发送消息")
             except Exception as e:
                 logger.error("任务 %s 发送消息时出错: %s", tid, e)
         else:
@@ -236,6 +242,7 @@ class TimPlugin(Star):
             return
 
         now = datetime.utcnow() + timedelta(hours=8)
+        self.trigger_event = event  # ← 新增这行
         umo = event.unified_msg_origin
         if umo not in self.tasks:
             self.tasks[umo] = {}
