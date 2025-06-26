@@ -26,7 +26,10 @@ class TimPlugin(Star):
         # 加载任务数据和信息数据
         self.tasks = self.__class__.load_json(TIM_FILE)
         self.infos = self.__class__.load_json(INFO_FILE)
-        self.trigger_event = None  # ← 新增这一行
+        
+        # 存储会话的 event 对象，用于发送消息
+        self.session_events = {}
+        
         # 全局任务编号从 1 开始（每个会话内任务编号唯一，整体递增便于管理）
         self.next_id = 1
         for task_dict in self.tasks.values():
@@ -176,26 +179,30 @@ class TimPlugin(Star):
         """
         构造消息链并发送任务消息，每次发送前重新加载 info.json 确保最新修改生效。
         """
-        target = task.get("target")
         # 每次发送前重新加载最新的发送内容数据
         latest_infos = self.load_json(INFO_FILE)
         content = ""
         if umo in latest_infos:
             content = latest_infos[umo].get(tid, "")
-        if target and content:
+            
+        if not content:
+            logger.error("任务 %s 的发送内容为空，无法发送消息。", tid)
+            return
+            
+        # 检查是否有该会话的 event 对象
+        if umo not in self.session_events:
+            logger.error("会话 %s 没有可用的 event 上下文，无法发送消息", umo)
+            return
+            
+        try:
+            event = self.session_events[umo]
             chain = MessageChain().message(content)
-            logger.debug("准备发送任务消息到目标 %s，任务 %s 内容: %s", target, tid, content)
-            try:
-
-                if self.trigger_event:
-                    await self.trigger_event.send(chain)
-                    logger.debug("任务 %s 消息发送成功", tid)
-                else:
-                    logger.error("没有可用的 event 上下文，无法发送消息")
-            except Exception as e:
-                logger.error("任务 %s 发送消息时出错: %s", tid, e)
-        else:
-            logger.error("任务 %s 的目标或发送内容为空，无法发送消息。", tid)
+            logger.debug("准备发送任务消息到会话 %s，任务 %s 内容: %s", umo, tid, content)
+            
+            await event.send(chain)
+            logger.debug("任务 %s 消息发送成功", tid)
+        except Exception as e:
+            logger.error("任务 %s 发送消息时出错: %s", tid, e)
 
     # 指令组 "tim"
     @filter.command_group("tim")
@@ -242,8 +249,11 @@ class TimPlugin(Star):
             return
 
         now = datetime.utcnow() + timedelta(hours=8)
-        self.trigger_event = event  # ← 新增这行
         umo = event.unified_msg_origin
+        
+        # 保存当前会话的 event 对象，用于后续发送消息
+        self.session_events[umo] = event
+        
         if umo not in self.tasks:
             self.tasks[umo] = {}
         if umo not in self.infos:
@@ -279,6 +289,10 @@ class TimPlugin(Star):
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         if umo in self.tasks and tid in self.tasks[umo]:
             if umo not in self.infos:
                 self.infos[umo] = {}
@@ -297,6 +311,10 @@ class TimPlugin(Star):
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         if umo in self.tasks and tid in self.tasks[umo]:
             del self.tasks[umo][tid]
             self.save_json(self.tasks, TIM_FILE)
@@ -317,6 +335,10 @@ class TimPlugin(Star):
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["status"] = "paused"
             self.save_json(self.tasks, TIM_FILE)
@@ -333,6 +355,10 @@ class TimPlugin(Star):
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         if umo in self.tasks and tid in self.tasks[umo]:
             self.tasks[umo][tid]["status"] = "active"
             self.save_json(self.tasks, TIM_FILE)
@@ -349,6 +375,10 @@ class TimPlugin(Star):
         """
         umo = event.unified_msg_origin
         tid = str(task_id)
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         if umo in self.infos and tid in self.infos[umo]:
             self.infos[umo][tid] = ""
             self.save_json(self.infos, INFO_FILE)
@@ -364,6 +394,10 @@ class TimPlugin(Star):
         示例: tim 列出任务
         """
         umo = event.unified_msg_origin
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         if umo not in self.tasks or not self.tasks[umo]:
             yield event.plain_result("当前会话中没有设置任何任务。")
             return
@@ -385,6 +419,11 @@ class TimPlugin(Star):
         显示定时任务插件的帮助信息
         示例: tim help
         """
+        umo = event.unified_msg_origin
+        
+        # 更新会话的 event 对象
+        self.session_events[umo] = event
+        
         help_msg = (
             "定时任务插件帮助信息：\n"
             "1. tim 设置定时 <任务种类> <时间> <发送内容>\n"
