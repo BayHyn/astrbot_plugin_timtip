@@ -8,7 +8,7 @@
 
 作者：IGCrystal  
 
-仓库：[https://github.com/IGCrystal/astrbot_plugin_timtip](https://github.com/IGCrystal/astrbot_plugin_timtip)
+仓库：[https://github.com/IGCrystal-NEO/astrbot_plugin_timtip](https://github.com/IGCrystal/astrbot_plugin_timtip)
 
 ## 简介
 
